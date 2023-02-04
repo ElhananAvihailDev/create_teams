@@ -4,13 +4,12 @@ const sqlUtilService = require('../../services/sqlCRUDL/sqlUtil.service')
 
 module.exports = {
     query,
-    getById,
+    getByMemberProjectIds,
     add,
     addMany,
     update,
-    updateMany,
-    remove,
-    removeByProjectId
+    resetProjectMembers,
+    removeByCriteria
 
 }
 
@@ -33,12 +32,12 @@ async function query(criteria) {
 }
 
 
-async function getById(projectMemberId) {
+async function getByMemberProjectIds(userId, projectId) {
     try {
         const sql = `
             SELECT * 
             FROM projectMember 
-            WHERE id = ${projectMemberId};
+            WHERE userId = ${userId} AND , projectId = ${projectId};
         `
         const [projectMember] = await dbService.runSQL(sql)
         if (!projectMember) return null
@@ -51,21 +50,23 @@ async function getById(projectMemberId) {
 
 async function add(projectMember) {
     try {
-        const { userId, projectId, isActive = true, prefs = [null] } = projectMember
-        console.log('projectMember',projectMember);
-        
+        const { userId, projectId, isActive = true, permissions = 0, prefs = [null] } = projectMember
+        console.log('projectMember', projectMember);
+
         const sql = `
-            INSERT INTO projectMember (userId, projectId, isActive, ${prefs.map((pref, idx) => 'preference_' + idx).join()}) 
-            VALUES (${userId},${projectId}, ${+isActive}, ${prefs.join()});
+            INSERT INTO projectMember (userId, projectId, isActive, permissions,${prefs.map((pref, idx) => 'preference_' + idx).join()}) 
+            VALUES (${userId},${projectId}, ${+isActive},${permissions}, ${prefs.join()});
         `
-        const { insertId } = await dbService.runSQL(sql)
-        if (!insertId) throw new Error(`Cannot add projectMember:\n"${name}", desc:"${description}", by user:"${creatorId}"`)
+        const { affectedRows } = await dbService.runSQL(sql)
+        if (!affectedRows) throw new Error(`Cannot add projectMember:\n" userId: ${userId}, projectId: ${projectId}`)
         projectMember = {
-            ...projectMember,
-            id: insertId,
+            userId,
+            projectId,
+            isActive,
+            permissions,
+            prefs,
             createdAt: Date.now()
         }
-
         return projectMember
     } catch (error) {
         throw error
@@ -83,15 +84,17 @@ async function addMany(projectId, members) {
 
 
 async function update(projectMember) {
-    const { isActive = true, prefs = [null] } = projectMember
+    const { userId, projectId, isActive = true, permissions = 0, prefs = [null] } = projectMember
     const sql = `
         UPDATE projectMember SET
-        isActive=${+isActive}, ${prefs.map((pref, idx) => `preference_${idx}=${pref}`).join()}
-        WHERE userId = ${projectMember.userId} AND projectId = ${projectMember.projectId};
+        isActive = ${+isActive},
+        permissions = ${permissions},
+        ${prefs.map((pref, idx) => `preference_${idx}=${pref}`).join()}
+        WHERE userId = ${userId} AND projectId = ${projectId};
     `
     try {
         const okPacket = await dbService.runSQL(sql)
-        if (okPacket.affectedRows !== 1) throw new Error(`No projectMember updated - projectMember id ${projectMember.id}`) 
+        if (okPacket.affectedRows !== 1) throw new Error(`No projectMember updated -  userId: ${userId}, projectId: ${projectId}`)
         return projectMember
     } catch (error) {
         throw error
@@ -99,22 +102,10 @@ async function update(projectMember) {
 }
 
 
-async function updateMany(projectId, members) {
+async function resetProjectMembers(projectId, members) {
     try {
-        const addMembers = []
-        const updateMembers = members.filter(member => {
-            if (member.id) return true
-            addMembers.push(member)
-            return false
-        })
-
-        for await (const member of updateMembers) {
-            await update(member)
-        }
-        // await Promise.all(updateMembers.map(update))
-        const notRemoveIds = updateMembers.map(member => member.id)
-        await removeByProjectId(projectId, notRemoveIds)
-        await addMany(projectId, addMembers)
+        await removeByCriteria({ projectId })
+        await addMany(projectId, members)
         return await query({ projectId })
     } catch (error) {
         throw error
@@ -122,13 +113,11 @@ async function updateMany(projectId, members) {
 }
 
 
-async function removeByProjectId(projectId, notRemoveIds) {
-    console.log("🚀 ~ file: projectMember.service.js:128 ~ removeByProjectId ~ notRemoveIds", notRemoveIds)
-    try {
-        let sql = `DELETE FROM projectMember
-        WHERE projectId = ${projectId}`
-        if (notRemoveIds?.length) sql += ` AND NOT id IN (${notRemoveIds.join()})`
 
+async function removeByCriteria(criteria) {
+    try {
+        let sql = `DELETE FROM projectMember`
+        sql += sqlUtilService.getWhereSql(criteria)
         const okPacket = await dbService.runSQL(sql)
         return okPacket
     } catch (error) {
@@ -136,23 +125,13 @@ async function removeByProjectId(projectId, notRemoveIds) {
     }
 }
 
-async function remove(projectMemberId) {
-    const sql = `DELETE FROM projectMember WHERE id = ${projectMemberId}`
-    try {
-        const okPacket = await dbService.runSQL(sql)
-        if (okPacket.affectedRows === 1) return okPacket
-        else throw new Error(`No projectMember deleted - projectMember id ${projectMemberId}`)
-    } catch (error) {
-        throw error
-    }
-}
 
 function _getOutputProjectMember(projectMember) {
     const outputProjectMember = {
-        id: projectMember.id,
         userId: projectMember.userId,
         projectId: projectMember.projectId,
         isActive: !!projectMember.isActive,
+        permissions: projectMember.permissions,
         prefs: [
             projectMember.preference_0,
             projectMember.preference_1,

@@ -61,7 +61,9 @@ async function add(project) {
         const { insertId } = await dbService.runSQL(sql)
         if (!insertId) throw new Error(`Cannot add project:\n"${name}", desc:"${description}", by user:"${creatorId}"`)
         project.id = insertId
-        project.members = await projectMemberService.updateMany(project.id, project.members)
+        if (project.members) {
+            project.members = await projectMemberService.resetProjectMembers(project.id, project.members)
+        }
         return project
     } catch (error) {
         throw error
@@ -82,8 +84,9 @@ async function update(project) {
     try {
         const okPacket = await dbService.runSQL(sql)
         if (okPacket.affectedRows !== 1) throw new Error(`No project updated - project id ${project.id}`)
-        project.members = await projectMemberService.updateMany(project.id, project.members)
-        console.log("🚀 ~ file: project.service.js:86 ~ update ~ project", project)
+        if (project.members) {
+            project.members = await projectMemberService.resetProjectMembers(project.id, project.members)
+        }
         return project
     } catch (error) {
         throw error

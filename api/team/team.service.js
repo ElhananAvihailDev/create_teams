@@ -77,7 +77,9 @@ async function update(team) {
                  WHERE id = ${team.id};`
         const okPacket = await dbService.runSQL(sql)
         if (okPacket.affectedRows !== 1) throw new Error(`No team updated - team id ${team.id}`)
-        team.members = await teamMemberService.updateMany(team.id, team.members)
+        if (team.members) {
+            team.members = await teamMemberService.resetTeamMembers(team.id, team.members)
+        }
         return team
     } catch (error) {
         throw error

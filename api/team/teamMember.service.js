@@ -4,13 +4,12 @@ const sqlUtilService = require('../../services/sqlCRUDL/sqlUtil.service')
 
 module.exports = {
     query,
-    getById,
+    getByMemberTeamIds,
     add,
     addMany,
     update,
-    updateMany,
-    remove,
-    removeByCriteria: removeByTeamId
+    resetTeamMembers,
+    removeByCriteria
 
 }
 
@@ -32,12 +31,12 @@ async function query(criteria) {
     }
 }
 
-async function getById(teamMemberId) {
+async function getByMemberTeamIds(memberId, teamId) {
     try {
         const sql = `
             SELECT * 
             FROM teamMember 
-            WHERE id = ${teamMemberId};
+            WHERE memberId = ${memberId} AND teamId = ${teamId};
         `
         const [teamMember] = await dbService.runSQL(sql)
         if (!teamMember) return null
@@ -54,11 +53,10 @@ async function add(teamMember) {
             INSERT INTO teamMember (userId, teamId) 
             VALUES (${userId}, ${teamId})
         `
-        const { insertId } = await dbService.runSQL(sql)
-        if (!insertId) throw new Error(`Cannot add teamMember:\n userId: ${userId},as member in team: ${teamId}`)
+        const { affectedRows } = await dbService.runSQL(sql)
+        if (!affectedRows) throw new Error(`Cannot add teamMember:\n userId: ${userId},as member in team: ${teamId}`)
         teamMember = {
             ...teamMember,
-            id: insertId,
             createdAt: Date.now()
         }
         return _getOutputTeamMember(teamMember)
@@ -77,14 +75,14 @@ async function addMany(teamId, members) {
 
 async function update(teamMember) {
     try {
-        const { isActive = true } = teamMember
+        const { isActive = true, userId, teamId } = teamMember
         const sql = `
             UPDATE teamMember SET
             isActive=${+isActive}
-            WHERE id = ${teamMember.id};
+            WHERE userId = ${userId} AND teamId = ${teamId};
         `
         const okPacket = await dbService.runSQL(sql)
-        if (okPacket.affectedRows !== 1) throw new Error(`No teamMember updated - teamMember id ${teamMember.id}`)
+        if (okPacket.affectedRows !== 1) throw new Error(`No teamMember updated - userId: ${userId}, teamId: ${teamId}`)
         return teamMember
     } catch (error) {
         throw error
@@ -93,22 +91,10 @@ async function update(teamMember) {
 
 
 
-async function updateMany(teamId, members) {
+async function resetTeamMembers(teamId, members) {
     try {
-        const addMembers = []
-        const updateMembers = members.filter(member => {
-            if (member.id) return true
-            addMembers.push(member)
-            return false
-        })
-
-        for await (const member of updateMembers) {
-            await update(member)
-        }
-        // await Promise.all(updateMembers.map(update))
-        const notRemoveIds = updateMembers.map(member => member.id)
-        await removeByTeamId(teamId, notRemoveIds)
-        await addMany(teamId, addMembers)
+        await removeByCriteria({ teamId })
+        await addMany(teamId, members)
         return await query({ teamId })
     } catch (error) {
         throw error
@@ -117,23 +103,10 @@ async function updateMany(teamId, members) {
 
 
 
-async function remove(teamMemberId) {
+async function removeByCriteria(criteria) {
     try {
-        const sql = `DELETE FROM teamMember WHERE id = ${teamMemberId}`
-        const okPacket = await dbService.runSQL(sql)
-        if (okPacket.affectedRows === 1) return okPacket
-        else throw new Error(`No teamMember deleted - teamMember id ${teamMemberId}`)
-    } catch (error) {
-        throw error
-    }
-}
-
-async function removeByTeamId(teamId, notRemoveIds) {
-    try {
-        let sql = `DELETE FROM teamMember
-        WHERE teamId = ${teamId}`
-        if (notRemoveIds?.length) sql += ` AND NOT id IN (${notRemoveIds.join()})`
-
+        let sql = `DELETE FROM teamMember`
+        sql += sqlUtilService.getWhereSql(criteria)
         const okPacket = await dbService.runSQL(sql)
         return okPacket
     } catch (error) {

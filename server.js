@@ -38,7 +38,7 @@ if (process.env.NODE_ENV === 'production') {
 
 const teamRoutes = require('./api/team/team.routes')
 const projectRoutes = require('./api/project/project.routes')
-const projectMembersRoutes = require('./api/projectMember/projectMember.routes')
+// const projectMembersRoutes = require('./api/projectMember/projectMember.routes')
 const authRoutes = require('./api/auth/auth.routes')
 const userRoutes = require('./api/user/user.routes')
 
@@ -48,7 +48,7 @@ const connectSockets = require('./api/socket/socket.routes')
 // routes
 app.use('/api/team', teamRoutes)
 app.use('/api/project', projectRoutes)
-app.use('/api/projectMember', projectMembersRoutes)
+// app.use('/api/projectMember', projectMembersRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/user', userRoutes)
 connectSockets(io)

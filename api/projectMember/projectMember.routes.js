@@ -11,6 +11,6 @@ router.get('/:id', getProjectMember)
 router.post('/',  requireAuth, addProjectMember)
 router.put('/:id',  requireAuth, updateProjectMember)
 // router.delete('/:id',  requireAuth, requireAdmin, deleteProjectMember)
-router.delete('/:id',  deleteProjectMember)
+// router.delete('/:id/',  deleteProjectMember)
 
 module.exports = router

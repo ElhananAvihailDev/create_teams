@@ -1,5 +1,6 @@
 const { dbConnectionDetails} = require('../config')
 const mysql = require('mysql2/promise');
+const loggerService = require('./logger.service');
 let connection = null
 
 const connect = (async () => {
@@ -7,6 +8,7 @@ const connect = (async () => {
         connection = await mysql.createConnection(dbConnectionDetails)
         console.log('DB connected')
     } catch (error) {
+        loggerService.error('DB service error - not connect:')
         console.error(error);
     }
 })
